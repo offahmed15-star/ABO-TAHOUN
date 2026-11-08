@@ -36,6 +36,9 @@ button:disabled{opacity:.4;cursor:default}
 .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:6px 0}
 .bar i{display:block;height:100%;background:var(--in)}
 .hide{display:none}
+.click{cursor:pointer}
+.mh{display:flex;justify-content:space-between;font-weight:800;padding:12px 0 4px;margin-top:6px;border-bottom:2px solid var(--line)}
+h2.s{margin:2px 0 6px}
 details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10px}
 </style>
 </head>
@@ -84,6 +87,8 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
         <div><label for="fCar">فلتر السيارة</label><select id="fCar"></select></div>
         <div><label for="fMon">الشهر</label><input id="fMon" type="month"></div>
       </div>
+      <label for="q">بحث (بيان، ورشة، تصنيف، سيارة، مبلغ)</label>
+      <input id="q" type="search" placeholder="اكتب أي كلمة...">
       <div class="sum" style="margin-top:12px">
         <div><small>الدخل</small><b class="in" id="tIn">0</b></div>
         <div><small>المصروفات</small><b class="out" id="tOut">0</b></div>
@@ -110,6 +115,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
       <button id="addCar" class="full" type="button">حفظ السيارة</button>
       <div id="carMsg" class="msg"></div>
     </div>
+    <input id="qc" type="search" placeholder="ابحث في السيارات (اسم، لوحة، سائق)..." style="margin-bottom:12px">
     <div id="carList"></div>
   </section>
 
@@ -130,7 +136,28 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
       <button id="addPlan" class="full" type="button">حفظ القسط</button>
       <div id="planMsg" class="msg"></div>
     </div>
+    <input id="qp" type="search" placeholder="ابحث في الأقساط (اسم القسط، سيارة)..." style="margin-bottom:12px">
     <div id="planList"></div>
+  </section>
+
+  <!-- صفحة السيارة -->
+  <section id="t-car" class="hide">
+    <button id="back" class="g" type="button" style="margin-bottom:12px">← رجوع للسيارات</button>
+    <div class="card" id="carHead"></div>
+    <div class="card">
+      <div class="row">
+        <div><label for="cMon">الشهر</label><input id="cMon" type="month"></div>
+        <div><label for="cq">بحث</label><input id="cq" type="search" placeholder="بيان، ورشة، تصنيف..."></div>
+      </div>
+      <div class="sum" style="margin-top:12px">
+        <div><small>الدخل</small><b class="in" id="cIn">0</b></div>
+        <div><small>المصروفات</small><b class="out" id="cOut">0</b></div>
+        <div><small>الصافي</small><b id="cNet">0</b></div>
+      </div>
+    </div>
+    <div class="card" id="carCats"></div>
+    <div id="carPlans"></div>
+    <div class="card" id="carOps"></div>
   </section>
 </div>
 
@@ -165,7 +192,7 @@ const CATS = {
   out: ["صيانة","قطع غيار","زيت وفلاتر","إطارات","وقود","أقساط","تأمين","ترخيص","مخالفات","سائق / راتب","غسيل","إكسسوارات","أخرى"],
   in: ["إيجار / تشغيل","توصيل","بيع سيارة","أخرى"]
 };
-let uid = null, cars = [], entries = [], plans = [], unsubs = [];
+let uid = null, curCar = null, cars = [], entries = [], plans = [], unsubs = [];
 const carName = id => { const c = cars.find(x => x.id === id); return c ? c.name + (c.plate ? " (" + c.plate + ")" : "") : "بدون سيارة"; };
 
 // ---- دخول ----
@@ -181,11 +208,14 @@ $("authBtn").onclick = async () => {
 $("logout").onclick = () => signOut(auth);
 
 // ---- تبويبات ----
-$("nav").onclick = e => {
-  const t = e.target.dataset.t; if (!t) return;
-  ["ops","cars","plans"].forEach(k => { $("t-"+k).classList.toggle("hide", k !== t); });
-  [...$("nav").children].forEach(b => b.className = b.dataset.t === t ? "" : "g");
-};
+function showTab(t, nav) {
+  ["ops","cars","plans","car"].forEach(k => $("t-"+k).classList.toggle("hide", k !== t));
+  [...$("nav").children].forEach(b => b.className = b.dataset.t === (nav || t) ? "" : "g");
+}
+$("nav").onclick = e => { const t = e.target.dataset.t; if (t) { curCar = null; showTab(t); } };
+$("back").onclick = () => { curCar = null; showTab("cars"); };
+$("cMon").onchange = () => renderCar();
+$("cq").oninput = () => renderCar();
 
 // ---- قوائم الاختيار ----
 function fillCats() { $("cat").innerHTML = CATS[$("type").value].map(c => `<option>${c}</option>`).join(""); }
@@ -197,7 +227,11 @@ function fillCarSelects() {
   $("fCar").innerHTML = '<option value="all">كل السيارات</option>' + opts.replace("بدون سيارة", "عمليات بدون سيارة").replace('value=""', 'value="none"');
   $("fCar").value = v || "all";
 }
+const hit = (q, arr) => !q || arr.some(v => String(v ?? "").toLowerCase().includes(q));
 $("fCar").onchange = $("fMon").onchange = renderOps;
+$("q").oninput = renderOps;
+$("qc").oninput = () => renderCars();
+$("qp").oninput = () => renderPlans();
 
 // ---- العمليات ----
 $("add").onclick = async () => {
@@ -215,8 +249,8 @@ $("add").onclick = async () => {
   } catch (e) { $("addMsg").textContent = em(e); }
 };
 function renderOps() {
-  const fc = $("fCar").value, fm = $("fMon").value;
-  const list = entries.filter(x => (fc === "all" || (fc === "none" ? !x.carId : x.carId === fc)) && (!fm || (x.date || "").startsWith(fm)));
+  const fc = $("fCar").value, fm = $("fMon").value, q = $("q").value.trim().toLowerCase();
+  const list = entries.filter(x => (fc === "all" || (fc === "none" ? !x.carId : x.carId === fc)) && (!fm || (x.date || "").startsWith(fm)) && hit(q, [x.cat, x.desc, x.vendor, carName(x.carId), x.date, x.amount, x.km]));
   let ti = 0, to = 0;
   list.forEach(x => x.type === "in" ? ti += x.amount : to += x.amount);
   $("tIn").textContent = fmt(ti); $("tOut").textContent = fmt(to);
@@ -239,18 +273,68 @@ $("addCar").onclick = async () => {
   } catch (e) { $("carMsg").textContent = em(e); }
 };
 function renderCars() {
-  $("carList").innerHTML = cars.length ? cars.map(c => {
+  const qc = $("qc").value.trim().toLowerCase();
+  $("carList").innerHTML = cars.length ? cars.filter(c => hit(qc, [c.name, c.plate, c.driver, c.note])).map(c => {
     const es = entries.filter(x => x.carId === c.id);
     const inc = es.filter(x => x.type === "in").reduce((s, x) => s + x.amount, 0);
     const exp = es.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
     const mnt = es.filter(x => ["صيانة","قطع غيار","زيت وفلاتر","إطارات"].includes(x.cat)).reduce((s, x) => s + x.amount, 0);
     const lastKm = Math.max(0, ...es.map(x => x.km || 0));
-    return `<div class="card"><div class="top"><h2>${esc(c.name)} ${c.plate ? "· " + esc(c.plate) : ""}</h2><button class="x" data-del="cars/${c.id}" aria-label="حذف">✕</button></div>
+    return `<div class="card click" data-open="${c.id}"><div class="top"><h2>${esc(c.name)} ${c.plate ? "· " + esc(c.plate) : ""}</h2><button class="x" data-del="cars/${c.id}" aria-label="حذف">✕</button></div>
       <div class="mute">${c.price ? "سعر الشراء " + fmt(c.price) : ""}${c.boughtAt ? " · " + esc(c.boughtAt) : ""}${c.driver ? " · السائق: " + esc(c.driver) : ""}${lastKm ? " · آخر عداد " + fmt(lastKm) + " كم" : ""}</div>
       ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
       <div class="sum" style="margin-top:10px"><div><small>الدخل</small><b class="in">${fmt(inc)}</b></div><div><small>المصروفات</small><b class="out">${fmt(exp)}</b></div><div><small>الصافي</small><b class="${inc - exp >= 0 ? "in" : "out"}">${fmt(inc - exp)}</b></div></div>
-      <div class="mute" style="margin-top:8px">منها صيانة وقطع غيار: ${fmt(mnt)}</div></div>`;
+      <div class="mute" style="margin-top:8px">منها صيانة وقطع غيار: ${fmt(mnt)}</div><div class="mute" style="margin-top:4px">اضغط على الكارت لفتح كل التفاصيل</div></div>`;
   }).join("") : '<div class="card empty">ضيف أول سيارة من فوق.</div>';
+}
+
+// ---- صفحة السيارة ----
+const dayName = d => { try { return new Date(d + "T12:00:00").toLocaleDateString("ar-EG", {weekday:"long", day:"numeric", month:"long"}); } catch { return d; } };
+const monName = k => { try { return new Date(k + "-01T12:00:00").toLocaleDateString("ar-EG", {month:"long", year:"numeric"}); } catch { return k; } };
+const netOf = a => a.reduce((s, x) => s + (x.type === "in" ? x.amount : -x.amount), 0);
+const netTxt = n => `<b class="${n >= 0 ? "in" : "out"}">${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}</b>`;
+const entryRow = x => `<div class="it"><div><b>${esc(x.cat)}</b> ${esc(x.desc)}<small>${[x.vendor, x.km ? fmt(x.km) + " كم" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
+  <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`;
+function planCard(p) {
+  const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
+  return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
+    <div class="mute">القسط ${fmt(p.monthly)}</div><div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
+    <div class="mute">اتدفع ${p.paid} من ${p.count} · المتبقي ${fmt((p.count - p.paid) * p.monthly)}</div>
+    <div class="${late ? "out" : "mute"}" style="margin-top:4px">${done ? "القسط خلص ✓" : (late ? "متأخر! " : "القسط الجاي: ") + due}</div>
+    <button class="full" data-pay="${p.id}" ${done ? "disabled" : ""}>سدّدت قسط (يتسجل كمصروف)</button></div>`;
+}
+function renderCar() {
+  if (!curCar) return;
+  const c = cars.find(x => x.id === curCar);
+  if (!c) { curCar = null; showTab("cars"); return; }
+  const m = $("cMon").value, q = $("cq").value.trim().toLowerCase();
+  const mine = entries.filter(x => x.carId === c.id);
+  const es = mine.filter(x => (!m || (x.date || "").startsWith(m)) && hit(q, [x.cat, x.desc, x.vendor, x.date, x.amount, x.km]));
+  const allOut = mine.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
+  const lastKm = Math.max(0, ...mine.map(x => x.km || 0));
+  const cp = plans.filter(p => p.carId === c.id);
+  const left = cp.reduce((s, p) => s + (p.count - p.paid) * p.monthly, 0);
+  $("carHead").innerHTML = `<h2 class="s">${esc(c.name)} ${c.plate ? "· " + esc(c.plate) : ""}</h2>
+    <div class="mute">${[c.price ? "سعر الشراء " + fmt(c.price) : "", c.boughtAt, c.driver ? "السائق: " + c.driver : "", lastKm ? "آخر عداد " + fmt(lastKm) + " كم" : ""].filter(Boolean).map(esc).join(" · ")}</div>
+    ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
+    <div class="mute" style="margin-top:6px">كل المصروفات من البداية: ${fmt(allOut)}${c.price ? " · التكلفة الكلية مع الشراء: " + fmt(allOut + c.price) : ""}${left ? " · أقساط متبقية: " + fmt(left) : ""}</div>
+    <button class="full" data-addop="${c.id}">+ عملية جديدة لهذه السيارة</button>`;
+  const ti = es.filter(x => x.type === "in").reduce((s, x) => s + x.amount, 0), to = es.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
+  $("cIn").textContent = fmt(ti); $("cOut").textContent = fmt(to);
+  $("cNet").textContent = fmt(ti - to); $("cNet").className = ti - to >= 0 ? "in" : "out";
+  const cat = t => { const o = {}; es.filter(x => x.type === t).forEach(x => o[x.cat] = (o[x.cat] || 0) + x.amount); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+  const co = cat("out"), ci = cat("in"), rows = (a, t) => a.map(([k, v]) => `<div class="it"><span>${esc(k)}</span><span class="amt ${t}">${fmt(v)}</span></div>`).join("");
+  $("carCats").classList.toggle("hide", !co.length && !ci.length);
+  $("carCats").innerHTML = (co.length ? '<h2 class="s">المصروفات حسب التصنيف</h2>' + rows(co, "out") : "") + (ci.length ? '<h2 class="s" style="margin-top:12px">الدخل حسب التصنيف</h2>' + rows(ci, "in") : "");
+  $("carPlans").innerHTML = cp.length ? '<h2 class="s">أقساط السيارة</h2>' + cp.map(planCard).join("") : "";
+  const byM = {};
+  es.forEach(x => { const k = (x.date || "").slice(0, 7); (byM[k] = byM[k] || []).push(x); });
+  $("carOps").innerHTML = es.length ? Object.keys(byM).sort().reverse().map(k => {
+    const byD = {};
+    byM[k].forEach(x => { (byD[x.date] = byD[x.date] || []).push(x); });
+    return `<div class="mh"><span>${monName(k)}</span>${netTxt(netOf(byM[k]))}</div>` + Object.keys(byD).sort().reverse().map(d =>
+      `<div class="mute" style="margin-top:8px;display:flex;justify-content:space-between"><span>${dayName(d)}</span>${netTxt(netOf(byD[d]))}</div>` + byD[d].map(entryRow).join("")).join("");
+  }).join("") : '<div class="empty">مفيش عمليات لهذه السيارة بالفلتر ده.</div>';
 }
 
 // ---- الأقساط ----
@@ -268,7 +352,8 @@ $("addPlan").onclick = async () => {
 };
 function nextDue(p) { const d = new Date(p.start); d.setMonth(d.getMonth() + p.paid); return d.toISOString().slice(0, 10); }
 function renderPlans() {
-  $("planList").innerHTML = plans.length ? plans.map(p => {
+  const qp = $("qp").value.trim().toLowerCase();
+  $("planList").innerHTML = plans.length ? plans.filter(p => hit(qp, [p.title, carName(p.carId), p.monthly])).map(p => {
     const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
     return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
       <div class="mute">${esc(carName(p.carId))} · القسط ${fmt(p.monthly)}</div>
@@ -280,6 +365,9 @@ function renderPlans() {
 }
 document.addEventListener("click", async e => {
   const t = e.target;
+  const o = t.closest("[data-open]");
+  if (o && !t.dataset.del) { curCar = o.dataset.open; $("cMon").value = ""; $("cq").value = ""; showTab("car", "cars"); renderCar(); window.scrollTo(0, 0); return; }
+  if (t.dataset.addop) { curCar = null; showTab("ops"); $("car").value = t.dataset.addop; window.scrollTo(0, 0); return; }
   try {
     if (t.dataset.del && confirm("متأكد من الحذف؟")) { const [c, id] = t.dataset.del.split("/"); await deleteDoc(doc(db, "users", uid, c, id)); }
     if (t.dataset.pay) {
@@ -291,7 +379,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---- تحميل البيانات ----
-const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); };
+const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); renderCar(); };
 onAuthStateChanged(auth, user => {
   unsubs.forEach(u => u()); unsubs = [];
   if (!user) { uid = null; $("app").classList.add("hide"); $("authBox").classList.remove("hide"); return; }
