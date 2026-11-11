@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>حسابات إدارة السيارات</title>
+<title>حسابات سيارات ابوطاحون</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#eef0ea;--card:#fff;--ink:#14302c;--mute:#5d6e6a;--line:#d6dbd3;--in:#1f7a4d;--out:#b3402a;--ac:#14302c}
@@ -43,12 +43,11 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
 </style>
 </head>
 <body>
-<h1>حسابات إدارة السيارات</h1>
+<h1>حسابات سيارات ابوطاحون</h1>
 
 <div id="authBox" class="card hide">
-  <div class="tabs"><button id="tL" type="button">دخول</button><button id="tR" type="button" class="g">حساب جديد</button></div>
   <label for="email">البريد الإلكتروني</label><input id="email" type="email" dir="ltr" autocomplete="email">
-  <label for="pass">كلمة المرور (6 حروف على الأقل)</label><input id="pass" type="password" dir="ltr">
+  <label for="pass">كلمة المرور</label><input id="pass" type="password" dir="ltr">
   <button id="authBtn" class="full" type="button">دخول</button>
   <div id="authMsg" class="msg"></div>
 </div>
@@ -163,7 +162,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, query, orderBy, onSnapshot, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -196,13 +195,10 @@ let uid = null, curCar = null, cars = [], entries = [], plans = [], unsubs = [];
 const carName = id => { const c = cars.find(x => x.id === id); return c ? c.name + (c.plate ? " (" + c.plate + ")" : "") : "بدون سيارة"; };
 
 // ---- دخول ----
-let mode = "L";
-const setMode = m => { mode = m; $("tL").className = m==="L" ? "" : "g"; $("tR").className = m==="R" ? "" : "g"; $("authBtn").textContent = m==="L" ? "دخول" : "إنشاء الحساب"; $("authMsg").textContent = ""; };
-$("tL").onclick = () => setMode("L"); $("tR").onclick = () => setMode("R");
 $("authBtn").onclick = async () => {
   $("authMsg").textContent = "";
   try { const e = $("email").value.trim(), p = $("pass").value;
-    mode === "L" ? await signInWithEmailAndPassword(auth, e, p) : await createUserWithEmailAndPassword(auth, e, p);
+    await signInWithEmailAndPassword(auth, e, p);
   } catch (err) { $("authMsg").textContent = em(err); }
 };
 $("logout").onclick = () => signOut(auth);
