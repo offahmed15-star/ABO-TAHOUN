@@ -57,6 +57,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
 
 <div id="app" class="hide">
   <div class="card top"><span id="who"></span><button id="logout" class="g" type="button">خروج</button></div>
+  <div class="card hide" id="alerts"></div>
   <div class="tabs" id="nav">
     <button data-t="ops" type="button">العمليات</button>
     <button data-t="cars" type="button" class="g">السيارات</button>
@@ -82,6 +83,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
       <label for="vendor">الورشة / المورد / العميل</label><input id="vendor">
       <label for="desc">البيان والتفاصيل</label><textarea id="desc" rows="2" placeholder="مثال: تغيير زيت وفلتر + تبديل تيل فرامل أمامي"></textarea>
       <button id="add" class="full" type="button">حفظ العملية</button>
+      <button id="cancelOp" class="g full hide" type="button">إلغاء التعديل</button>
       <div id="addMsg" class="msg"></div>
     </div>
     <div class="card">
@@ -97,6 +99,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
         <div><small>الصافي</small><b id="tNet">0</b></div>
       </div>
     </div>
+    <div class="row" style="margin-bottom:12px"><button data-export="xlsx" data-src="ops" type="button" class="g">تصدير Excel</button><button data-export="pdf" data-src="ops" type="button" class="g">تصدير PDF</button></div>
     <div class="card" id="opsList"></div>
   </section>
 
@@ -114,7 +117,10 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
         <div><label for="cDriver">السائق</label><input id="cDriver"></div>
       </div>
       <label for="cNote">ملاحظات (ترخيص، تأمين، لون...)</label><input id="cNote">
+      <div class="row"><div><label for="cLic">انتهاء الترخيص (للتنبيه)</label><input id="cLic" type="date"></div><div><label for="cIns">انتهاء التأمين (للتنبيه)</label><input id="cIns" type="date"></div></div>
+      <label for="cOil">تغيير الزيت كل كام كم؟ (للتنبيه)</label><input id="cOil" type="number" inputmode="numeric" min="0" placeholder="مثال: 5000">
       <button id="addCar" class="full" type="button">حفظ السيارة</button>
+      <button id="cancelCar" class="g full hide" type="button">إلغاء التعديل</button>
       <div id="carMsg" class="msg"></div>
     </div>
     <input id="qc" type="search" placeholder="ابحث في السيارات (اسم، لوحة، سائق)..." style="margin-bottom:12px">
@@ -136,6 +142,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
         <div><label for="pPaid">اتدفع منها قبل كده</label><input id="pPaid" type="number" inputmode="numeric" min="0" value="0"></div>
       </div>
       <button id="addPlan" class="full" type="button">حفظ القسط</button>
+      <button id="cancelPlan" class="g full hide" type="button">إلغاء التعديل</button>
       <div id="planMsg" class="msg"></div>
     </div>
     <input id="qp" type="search" placeholder="ابحث في الأقساط (اسم القسط، سيارة)..." style="margin-bottom:12px">
@@ -159,6 +166,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
     </div>
     <div class="card" id="carCats"></div>
     <div id="carPlans"></div>
+    <div class="row" style="margin-bottom:12px"><button data-export="xlsx" data-src="car" type="button" class="g">تصدير Excel</button><button data-export="pdf" data-src="car" type="button" class="g">تصدير PDF</button></div>
     <div class="card" id="carOps"></div>
   </section>
 </div>
@@ -166,7 +174,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, query, orderBy, onSnapshot, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc as addDoc0, deleteDoc, updateDoc, doc, query, orderBy, onSnapshot, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAtCE0MWX-biwiRiVE3e8nNXhK-NnUioAo",
@@ -178,6 +186,7 @@ const firebaseConfig = {
   measurementId: "G-H83XN123G1"
 };
 const fb = initializeApp(firebaseConfig), auth = getAuth(fb), db = getFirestore(fb);
+const addDoc = (ref, data) => { if (edit && edit.kind === ref.id) { delete data.createdAt; return updateDoc(doc(db, "users", uid, edit.kind, edit.id), data).then(r => (resetEdit(), r)); } return addDoc0(ref, data).then(r => (resetEdit(), r)); };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => Number(n || 0).toLocaleString("ar-EG", {maximumFractionDigits: 2});
@@ -194,7 +203,7 @@ const CATS = {
   out: ["صيانة","قطع غيار","زيت وفلاتر","إطارات","وقود","أقساط","تأمين","ترخيص","مخالفات","سائق / راتب","غسيل","إكسسوارات","أخرى"],
   in: ["إيجار / تشغيل","توصيل","بيع سيارة","أخرى"]
 };
-let uid = null, curCar = null, cars = [], entries = [], plans = [], unsubs = [];
+let uid = null, edit = null, curCar = null, cars = [], entries = [], plans = [], unsubs = [];
 const carName = id => { const c = cars.find(x => x.id === id); return c ? c.name + (c.plate ? " (" + c.plate + ")" : "") : "بدون سيارة"; };
 
 // ---- دخول ----
@@ -211,7 +220,7 @@ function showTab(t, nav) {
   ["ops","cars","plans","car"].forEach(k => $("t-"+k).classList.toggle("hide", k !== t));
   [...$("nav").children].forEach(b => b.className = b.dataset.t === (nav || t) ? "" : "g");
 }
-$("nav").onclick = e => { const t = e.target.dataset.t; if (t) { curCar = null; showTab(t); } };
+$("nav").onclick = e => { const t = e.target.dataset.t; if (t) { curCar = null; if (edit) cancelEdit(); showTab(t); } };
 $("back").onclick = () => { curCar = null; showTab("cars"); };
 $("cMon").onchange = () => renderCar();
 $("cq").oninput = () => renderCar();
@@ -250,12 +259,13 @@ $("add").onclick = async () => {
 function renderOps() {
   const fc = $("fCar").value, fm = $("fMon").value, q = $("q").value.trim().toLowerCase();
   const list = entries.filter(x => (fc === "all" || (fc === "none" ? !x.carId : x.carId === fc)) && (!fm || (x.date || "").startsWith(fm)) && hit(q, [x.cat, x.desc, x.vendor, carName(x.carId), x.date, x.amount, x.km]));
+  lastOps = {list, label: [fc !== "all" ? $("fCar").selectedOptions[0].text : "", fm, q].filter(Boolean).join(" · ")};
   let ti = 0, to = 0;
   list.forEach(x => x.type === "in" ? ti += x.amount : to += x.amount);
   $("tIn").textContent = fmt(ti); $("tOut").textContent = fmt(to);
   $("tNet").textContent = fmt(ti - to); $("tNet").className = ti - to >= 0 ? "in" : "out";
   $("opsList").innerHTML = list.length ? list.map(x => `<div class="it"><div><b>${esc(x.cat)}</b> ${esc(x.desc)}<small>${esc(x.date)} · ${esc(carName(x.carId))}${x.vendor ? " · " + esc(x.vendor) : ""}${x.km ? " · " + fmt(x.km) + " كم" : ""}</small></div>
-    <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`).join("")
+    <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-edit="entries/${x.id}" aria-label="تعديل">✎</button><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`).join("")
     : '<div class="empty">مفيش عمليات بالفلتر ده.</div>';
 }
 
@@ -266,7 +276,7 @@ $("addCar").onclick = async () => {
   try {
     await addDoc(collection(db, "users", uid, "cars"), {
       name: $("cName").value.trim(), plate: $("cPlate").value.trim(), price: parseFloat($("cPrice").value) || 0,
-      boughtAt: $("cDate").value, driver: $("cDriver").value.trim(), note: $("cNote").value.trim(), createdAt: serverTimestamp()
+      boughtAt: $("cDate").value, driver: $("cDriver").value.trim(), note: $("cNote").value.trim(), lic: $("cLic").value, ins: $("cIns").value, oil: parseInt($("cOil").value) || 0, createdAt: serverTimestamp()
     });
     ["cName","cPlate","cPrice","cDate","cDriver","cNote"].forEach(i => $(i).value = "");
   } catch (e) { $("carMsg").textContent = em(e); }
@@ -279,7 +289,7 @@ function renderCars() {
     const exp = es.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
     const mnt = es.filter(x => ["صيانة","قطع غيار","زيت وفلاتر","إطارات"].includes(x.cat)).reduce((s, x) => s + x.amount, 0);
     const lastKm = Math.max(0, ...es.map(x => x.km || 0));
-    return `<div class="card click" data-open="${c.id}"><div class="top"><h2>${esc(c.name)} ${c.plate ? "· " + esc(c.plate) : ""}</h2><button class="x" data-del="cars/${c.id}" aria-label="حذف">✕</button></div>
+    return `<div class="card click" data-open="${c.id}"><div class="top"><h2>${esc(c.name)} ${c.plate ? "· " + esc(c.plate) : ""}</h2><button class="x" data-edit="cars/${c.id}" aria-label="تعديل">✎</button><button class="x" data-del="cars/${c.id}" aria-label="حذف">✕</button></div>
       <div class="mute">${c.price ? "سعر الشراء " + fmt(c.price) : ""}${c.boughtAt ? " · " + esc(c.boughtAt) : ""}${c.driver ? " · السائق: " + esc(c.driver) : ""}${lastKm ? " · آخر عداد " + fmt(lastKm) + " كم" : ""}</div>
       ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
       <div class="sum" style="margin-top:10px"><div><small>الدخل</small><b class="in">${fmt(inc)}</b></div><div><small>المصروفات</small><b class="out">${fmt(exp)}</b></div><div><small>الصافي</small><b class="${inc - exp >= 0 ? "in" : "out"}">${fmt(inc - exp)}</b></div></div>
@@ -293,10 +303,10 @@ const monName = k => { try { return new Date(k + "-01T12:00:00").toLocaleDateStr
 const netOf = a => a.reduce((s, x) => s + (x.type === "in" ? x.amount : -x.amount), 0);
 const netTxt = n => `<b class="${n >= 0 ? "in" : "out"}">${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}</b>`;
 const entryRow = x => `<div class="it"><div><b>${esc(x.cat)}</b> ${esc(x.desc)}<small>${[x.vendor, x.km ? fmt(x.km) + " كم" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
-  <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`;
+  <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-edit="entries/${x.id}" aria-label="تعديل">✎</button><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`;
 function planCard(p) {
   const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
-  return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
+  return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-edit="plans/${p.id}" aria-label="تعديل">✎</button><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
     <div class="mute">القسط ${fmt(p.monthly)}</div><div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
     <div class="mute">اتدفع ${p.paid} من ${p.count} · المتبقي ${fmt((p.count - p.paid) * p.monthly)}</div>
     <div class="${late ? "out" : "mute"}" style="margin-top:4px">${done ? "القسط خلص ✓" : (late ? "متأخر! " : "القسط الجاي: ") + due}</div>
@@ -309,6 +319,7 @@ function renderCar() {
   const m = $("cMon").value, q = $("cq").value.trim().toLowerCase();
   const mine = entries.filter(x => x.carId === c.id);
   const es = mine.filter(x => (!m || (x.date || "").startsWith(m)) && hit(q, [x.cat, x.desc, x.vendor, x.date, x.amount, x.km]));
+  lastCar = {list: es, label: [carName(c.id), m, q].filter(Boolean).join(" · ")};
   const allOut = mine.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
   const lastKm = Math.max(0, ...mine.map(x => x.km || 0));
   const cp = plans.filter(p => p.carId === c.id);
@@ -317,7 +328,8 @@ function renderCar() {
     <div class="mute">${[c.price ? "سعر الشراء " + fmt(c.price) : "", c.boughtAt, c.driver ? "السائق: " + c.driver : "", lastKm ? "آخر عداد " + fmt(lastKm) + " كم" : ""].filter(Boolean).map(esc).join(" · ")}</div>
     ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
     <div class="mute" style="margin-top:6px">كل المصروفات من البداية: ${fmt(allOut)}${c.price ? " · التكلفة الكلية مع الشراء: " + fmt(allOut + c.price) : ""}${left ? " · أقساط متبقية: " + fmt(left) : ""}</div>
-    <button class="full" data-addop="${c.id}">+ عملية جديدة لهذه السيارة</button>`;
+    ${alertsFor(c).map(x => `<div class="${x.lvl === "bad" ? "out" : ""}" style="margin-top:6px">${x.lvl === "bad" ? "⛔" : "⚠️"} ${esc(x.text)}</div>`).join("")}
+    <button class="full" data-addop="${c.id}">+ عملية جديدة لهذه السيارة</button><button class="full g" data-edit="cars/${c.id}">✎ تعديل بيانات السيارة</button>`;
   const ti = es.filter(x => x.type === "in").reduce((s, x) => s + x.amount, 0), to = es.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
   $("cIn").textContent = fmt(ti); $("cOut").textContent = fmt(to);
   $("cNet").textContent = fmt(ti - to); $("cNet").className = ti - to >= 0 ? "in" : "out";
@@ -334,6 +346,58 @@ function renderCar() {
     return `<div class="mh"><span>${monName(k)}</span>${netTxt(netOf(byM[k]))}</div>` + Object.keys(byD).sort().reverse().map(d =>
       `<div class="mute" style="margin-top:8px;display:flex;justify-content:space-between"><span>${dayName(d)}</span>${netTxt(netOf(byD[d]))}</div>` + byD[d].map(entryRow).join("")).join("");
   }).join("") : '<div class="empty">مفيش عمليات لهذه السيارة بالفلتر ده.</div>';
+}
+
+// ---- تعديل / تنبيهات / تصدير ----
+let lastOps = {list: [], label: ""}, lastCar = {list: [], label: ""};
+function resetEdit() {
+  edit = null; $("add").textContent = "حفظ العملية"; $("addCar").textContent = "حفظ السيارة"; $("addPlan").textContent = "حفظ القسط";
+  ["cancelOp","cancelCar","cancelPlan"].forEach(i => $(i).classList.add("hide"));
+  ["cLic","cIns","cOil"].forEach(i => $(i).value = ""); $("pStart").value = today(); $("date").value = today();
+}
+function cancelEdit() { resetEdit(); ["amount","km","vendor","desc","cName","cPlate","cPrice","cDate","cDriver","cNote","pTitle","pMonthly","pCount"].forEach(i => $(i).value = ""); $("pPaid").value = 0; }
+["cancelOp","cancelCar","cancelPlan"].forEach(i => $(i).onclick = cancelEdit);
+function startEdit(kind, id) {
+  const x = {entries, cars, plans}[kind].find(v => v.id === id); if (!x) return;
+  curCar = null; edit = {kind, id};
+  const set = o => Object.entries(o).forEach(([k, v]) => $(k).value = v ?? "");
+  if (kind === "entries") { showTab("ops"); $("type").value = x.type; fillCats(); set({cat: x.cat, car: x.carId, amount: x.amount, date: x.date, km: x.km, vendor: x.vendor, desc: x.desc}); $("add").textContent = "حفظ التعديل"; $("cancelOp").classList.remove("hide"); }
+  if (kind === "cars") { showTab("cars"); set({cName: x.name, cPlate: x.plate, cPrice: x.price, cDate: x.boughtAt, cDriver: x.driver, cNote: x.note, cLic: x.lic, cIns: x.ins, cOil: x.oil || ""}); $("addCar").textContent = "حفظ التعديل"; $("cancelCar").classList.remove("hide"); }
+  if (kind === "plans") { showTab("plans"); set({pTitle: x.title, pCar: x.carId, pMonthly: x.monthly, pCount: x.count, pStart: x.start, pPaid: x.paid}); $("addPlan").textContent = "حفظ التعديل"; $("cancelPlan").classList.remove("hide"); }
+  window.scrollTo(0, 0);
+}
+const dleft = d => Math.round((new Date(d) - new Date(today())) / 864e5);
+function alertsFor(c) {
+  const a = [], mk = (lvl, text) => a.push({lvl, text, carId: c.id});
+  [["lic", "الترخيص"], ["ins", "التأمين"]].forEach(([k, n]) => { if (!c[k]) return; const d = dleft(c[k]); if (d < 0) mk("bad", `${n} انتهى من ${-d} يوم`); else if (d <= 30) mk("warn", `${n} ينتهي بعد ${d} يوم`); });
+  if (c.oil) {
+    const es = entries.filter(x => x.carId === c.id && x.km), oils = es.filter(x => x.cat === "زيت وفلاتر").map(x => x.km);
+    if (oils.length) { const left = c.oil - (Math.max(...es.map(x => x.km)) - Math.max(...oils)); if (left <= 0) mk("bad", `تغيير الزيت متأخر ${fmt(-left)} كم`); else if (left <= 500) mk("warn", `باقي ${fmt(left)} كم على تغيير الزيت`); }
+  }
+  return a;
+}
+function renderAlerts() {
+  const a = cars.flatMap(c => alertsFor(c).map(x => ({...x, text: carName(c.id) + ": " + x.text})));
+  plans.filter(p => p.paid < p.count).forEach(p => { const d = dleft(nextDue(p)); if (d < 0) a.push({lvl: "bad", text: `${p.title}: قسط متأخر ${-d} يوم`, carId: p.carId}); else if (d <= 7) a.push({lvl: "warn", text: `${p.title}: قسط بعد ${d} يوم`, carId: p.carId}); });
+  a.sort((x, y) => (x.lvl === "bad" ? 0 : 1) - (y.lvl === "bad" ? 0 : 1));
+  $("alerts").classList.toggle("hide", !a.length);
+  $("alerts").innerHTML = `<h2 class="s">🔔 تنبيهات (${a.length})</h2>` + a.map(x => `<div class="it ${x.carId ? "click" : ""}" ${x.carId ? `data-open="${x.carId}"` : ""}><span class="${x.lvl === "bad" ? "out" : ""}" style="${x.lvl === "warn" ? "color:#c5851a" : ""}">${x.lvl === "bad" ? "⛔" : "⚠️"} ${esc(x.text)}</span></div>`).join("");
+}
+function doExport(kind, src) {
+  const {list, label} = src === "car" ? lastCar : lastOps;
+  if (!list.length) { alert("مفيش عمليات للتصدير"); return; }
+  const head = ["التاريخ","النوع","التصنيف","السيارة","البيان","الورشة / المورد","الكيلومتر","المبلغ"];
+  const rows = list.map(x => [x.date, x.type === "in" ? "دخل" : "مصروف", x.cat, carName(x.carId), x.desc || "", x.vendor || "", x.km || "", x.amount]);
+  const ti = list.filter(x => x.type === "in").reduce((s, x) => s + x.amount, 0), to = list.filter(x => x.type === "out").reduce((s, x) => s + x.amount, 0);
+  const title = "حسابات سيارات ابوطاحون" + (label ? " — " + label : "");
+  if (kind === "xlsx") {
+    const go = () => { const e = ["","","","","",""], ws = XLSX.utils.aoa_to_sheet([[title], [], head, ...rows, [], [...e, "إجمالي الدخل", ti], [...e, "إجمالي المصروفات", to], [...e, "الصافي", ti - to]]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "العمليات"); wb.Workbook = {Views: [{RTL: true}]}; XLSX.writeFile(wb, "abotahoun-" + today() + ".xlsx"); };
+    if (window.XLSX) go(); else { const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; sc.onload = go; sc.onerror = () => alert("تعذر تحميل أداة Excel، تأكد من الإنترنت"); document.head.append(sc); }
+  } else {
+    const w = window.open("", "_blank"); if (!w) { alert("اسمح بالنوافذ المنبثقة للموقع"); return; }
+    w.document.write(`<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Cairo,Tahoma,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #999;padding:6px;text-align:right}th{background:#eee}h2{margin:0 0 6px}</style></head><body><h2>${esc(title)}</h2><p>الدخل: ${fmt(ti)} · المصروفات: ${fmt(to)} · الصافي: ${fmt(ti - to)}</p><table><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
+  }
 }
 
 // ---- الأقساط ----
@@ -354,7 +418,7 @@ function renderPlans() {
   const qp = $("qp").value.trim().toLowerCase();
   $("planList").innerHTML = plans.length ? plans.filter(p => hit(qp, [p.title, carName(p.carId), p.monthly])).map(p => {
     const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
-    return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
+    return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-edit="plans/${p.id}" aria-label="تعديل">✎</button><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
       <div class="mute">${esc(carName(p.carId))} · القسط ${fmt(p.monthly)}</div>
       <div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
       <div class="mute">اتدفع ${p.paid} من ${p.count} · المتبقي ${fmt((p.count - p.paid) * p.monthly)}</div>
@@ -365,6 +429,8 @@ function renderPlans() {
 document.addEventListener("click", async e => {
   const t = e.target;
   const o = t.closest("[data-open]");
+  if (t.dataset.edit) { const [k, i] = t.dataset.edit.split("/"); startEdit(k, i); return; }
+  if (t.dataset.export) { doExport(t.dataset.export, t.dataset.src); return; }
   if (o && !t.dataset.del) { curCar = o.dataset.open; $("cMon").value = ""; $("cq").value = ""; showTab("car", "cars"); renderCar(); window.scrollTo(0, 0); return; }
   if (t.dataset.addop) { curCar = null; showTab("ops"); $("car").value = t.dataset.addop; window.scrollTo(0, 0); return; }
   try {
@@ -378,7 +444,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---- تحميل البيانات ----
-const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); renderCar(); };
+const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); renderCar(); renderAlerts(); };
 onAuthStateChanged(auth, user => {
   unsubs.forEach(u => u()); unsubs = [];
   if (!user) { uid = null; $("app").classList.add("hide"); $("authBox").classList.remove("hide"); return; }
