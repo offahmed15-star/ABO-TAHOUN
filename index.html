@@ -43,6 +43,8 @@ h2.s{margin:2px 0 6px}
 .brand h1{margin:0}
 .brand img{height:80px;width:auto;max-width:48%;object-fit:contain;border-radius:8px;background:#fff}
 details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10px}
+a{color:var(--in);text-decoration:none;font-weight:600}
+.chk{display:flex;align-items:center;gap:8px}.chk input{width:auto;padding:0}
 </style>
 </head>
 <body>
@@ -61,6 +63,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
   <div class="tabs" id="nav">
     <button data-t="ops" type="button">العمليات</button>
     <button data-t="cars" type="button" class="g">السيارات</button>
+    <button data-t="cust" type="button" class="g">العملاء</button>
     <button data-t="plans" type="button" class="g">الأقساط</button>
   </div>
 
@@ -127,6 +130,51 @@ details summary{cursor:pointer;color:var(--mute);font-size:.85rem;margin-top:10p
     <div id="carList"></div>
   </section>
 
+  <!-- العملاء -->
+  <section id="t-cust" class="hide">
+    <div class="card">
+      <h2>إضافة عميل</h2>
+      <label for="cuName">اسم العميل</label><input id="cuName">
+      <div class="row">
+        <div><label for="cuPhone">رقم التليفون</label><input id="cuPhone" type="tel" inputmode="tel" dir="ltr"></div>
+        <div><label for="cuPhone2">رقم تاني (اختياري)</label><input id="cuPhone2" type="tel" inputmode="tel" dir="ltr"></div>
+      </div>
+      <label for="cuAddress">العنوان</label><input id="cuAddress">
+      <label for="cuNote">ملاحظات</label><input id="cuNote" placeholder="مثال: عميل شهري، بيفضل سيارة معينة...">
+      <button id="addCust" class="full" type="button">حفظ العميل</button>
+      <button id="cancelCust" class="g full hide" type="button">إلغاء التعديل</button>
+      <div id="custMsg" class="msg"></div>
+    </div>
+    <input id="qcu" type="search" placeholder="ابحث في العملاء (اسم، تليفون، عنوان)..." style="margin-bottom:12px">
+    <div id="custList"></div>
+  </section>
+
+  <!-- صفحة العميل -->
+  <section id="t-client" class="hide">
+    <button id="backCust" class="g" type="button" style="margin-bottom:12px">← رجوع للعملاء</button>
+    <div class="card" id="custHead"></div>
+    <div class="card" id="tripForm">
+      <h2>رحلة جديدة</h2>
+      <div class="row">
+        <div><label for="tFrom">من</label><input id="tFrom" list="places" placeholder="مثال: المنشية"></div>
+        <div><label for="tTo">إلى</label><input id="tTo" list="places" placeholder="مثال: برج العرب"></div>
+      </div>
+      <div class="row">
+        <div><label for="tDate">التاريخ</label><input id="tDate" type="date"></div>
+        <div><label for="tCar">السيارة</label><select id="tCar"></select></div>
+      </div>
+      <label for="tAmount">المبلغ (اختياري)</label><input id="tAmount" type="number" inputmode="decimal" min="0" step="any">
+      <label class="chk"><input id="tIncome" type="checkbox" checked> سجّل المبلغ كدخل في العمليات (تصنيف: توصيل)</label>
+      <label for="tNote">ملاحظات</label><input id="tNote">
+      <button id="addTrip" class="full" type="button">حفظ الرحلة</button>
+      <button id="cancelTrip" class="g full hide" type="button">إلغاء التعديل</button>
+      <div id="tripMsg" class="msg"></div>
+      <datalist id="places"></datalist>
+    </div>
+    <div class="card"><label for="tq" style="margin-top:0">بحث في الرحلات</label><input id="tq" type="search" placeholder="مكان، سيارة، ملاحظة..."></div>
+    <div class="card" id="tripList"></div>
+  </section>
+
   <!-- الأقساط -->
   <section id="t-plans" class="hide">
     <div class="card">
@@ -190,7 +238,7 @@ const addDoc = (ref, data) => { if (edit && edit.kind === ref.id) { delete data.
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => Number(n || 0).toLocaleString("ar-EG", {maximumFractionDigits: 2});
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 const errs = {
   "auth/invalid-credential":"البريد أو كلمة المرور غلط", "auth/invalid-email":"البريد الإلكتروني غير صحيح",
   "auth/email-already-in-use":"البريد ده مسجل قبل كده، جرب الدخول", "auth/weak-password":"كلمة المرور لازم 6 حروف على الأقل",
@@ -203,7 +251,7 @@ const CATS = {
   out: ["صيانة","قطع غيار","زيت وفلاتر","إطارات","وقود","أقساط","تأمين","ترخيص","مخالفات","سائق / راتب","غسيل","إكسسوارات","أخرى"],
   in: ["إيجار / تشغيل","توصيل","بيع سيارة","أخرى"]
 };
-let uid = null, edit = null, curCar = null, cars = [], entries = [], plans = [], unsubs = [];
+let uid = null, edit = null, curCar = null, curCust = null, cars = [], entries = [], plans = [], customers = [], trips = [], unsubs = [];
 const carName = id => { const c = cars.find(x => x.id === id); return c ? c.name + (c.plate ? " (" + c.plate + ")" : "") : "بدون سيارة"; };
 
 // ---- دخول ----
@@ -217,11 +265,14 @@ $("logout").onclick = () => signOut(auth);
 
 // ---- تبويبات ----
 function showTab(t, nav) {
-  ["ops","cars","plans","car"].forEach(k => $("t-"+k).classList.toggle("hide", k !== t));
+  ["ops","cars","plans","car","cust","client"].forEach(k => $("t-"+k).classList.toggle("hide", k !== t));
   [...$("nav").children].forEach(b => b.className = b.dataset.t === (nav || t) ? "" : "g");
 }
-$("nav").onclick = e => { const t = e.target.dataset.t; if (t) { curCar = null; if (edit) cancelEdit(); showTab(t); } };
+$("nav").onclick = e => { const t = e.target.dataset.t; if (t) { curCar = null; curCust = null; if (edit) cancelEdit(); showTab(t); } };
 $("back").onclick = () => { curCar = null; showTab("cars"); };
+$("backCust").onclick = () => { curCust = null; if (edit) cancelEdit(); showTab("cust"); };
+$("qcu").oninput = () => renderCusts();
+$("tq").oninput = () => renderClient();
 $("cMon").onchange = () => renderCar();
 $("cq").oninput = () => renderCar();
 
@@ -230,7 +281,7 @@ function fillCats() { $("cat").innerHTML = CATS[$("type").value].map(c => `<opti
 $("type").onchange = fillCats;
 function fillCarSelects() {
   const opts = '<option value="">بدون سيارة</option>' + cars.map(c => `<option value="${c.id}">${esc(carName(c.id))}</option>`).join("");
-  for (const id of ["car","pCar"]) { const v = $(id).value; $(id).innerHTML = opts; $(id).value = v; }
+  for (const id of ["car","pCar","tCar"]) { const v = $(id).value; $(id).innerHTML = opts; $(id).value = v; }
   const v = $("fCar").value;
   $("fCar").innerHTML = '<option value="all">كل السيارات</option>' + opts.replace("بدون سيارة", "عمليات بدون سيارة").replace('value=""', 'value="none"');
   $("fCar").value = v || "all";
@@ -304,10 +355,10 @@ const netOf = a => a.reduce((s, x) => s + (x.type === "in" ? x.amount : -x.amoun
 const netTxt = n => `<b class="${n >= 0 ? "in" : "out"}">${n >= 0 ? "+" : "−"}${fmt(Math.abs(n))}</b>`;
 const entryRow = x => `<div class="it"><div><b>${esc(x.cat)}</b> ${esc(x.desc)}<small>${[x.vendor, x.km ? fmt(x.km) + " كم" : ""].filter(Boolean).map(esc).join(" · ")}</small></div>
   <div style="display:flex;align-items:center"><span class="amt ${x.type}">${x.type === "in" ? "+" : "−"}${fmt(x.amount)}</span><button class="x" data-edit="entries/${x.id}" aria-label="تعديل">✎</button><button class="x" data-del="entries/${x.id}" aria-label="حذف">✕</button></div></div>`;
-function planCard(p) {
+function planCard(p, showCar) {
   const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
   return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-edit="plans/${p.id}" aria-label="تعديل">✎</button><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
-    <div class="mute">القسط ${fmt(p.monthly)}</div><div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
+    <div class="mute">${showCar ? esc(carName(p.carId)) + " · " : ""}القسط ${fmt(p.monthly)}</div><div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
     <div class="mute">اتدفع ${p.paid} من ${p.count} · المتبقي ${fmt((p.count - p.paid) * p.monthly)}</div>
     <div class="${late ? "out" : "mute"}" style="margin-top:4px">${done ? "القسط خلص ✓" : (late ? "متأخر! " : "القسط الجاي: ") + due}</div>
     <button class="full" data-pay="${p.id}" ${done ? "disabled" : ""}>سدّدت قسط (يتسجل كمصروف)</button></div>`;
@@ -337,7 +388,7 @@ function renderCar() {
   const co = cat("out"), ci = cat("in"), rows = (a, t) => a.map(([k, v]) => `<div class="it"><span>${esc(k)}</span><span class="amt ${t}">${fmt(v)}</span></div>`).join("");
   $("carCats").classList.toggle("hide", !co.length && !ci.length);
   $("carCats").innerHTML = (co.length ? '<h2 class="s">المصروفات حسب التصنيف</h2>' + rows(co, "out") : "") + (ci.length ? '<h2 class="s" style="margin-top:12px">الدخل حسب التصنيف</h2>' + rows(ci, "in") : "");
-  $("carPlans").innerHTML = cp.length ? '<h2 class="s">أقساط السيارة</h2>' + cp.map(planCard).join("") : "";
+  $("carPlans").innerHTML = cp.length ? '<h2 class="s">أقساط السيارة</h2>' + cp.map(p => planCard(p, false)).join("") : "";
   const byM = {};
   es.forEach(x => { const k = (x.date || "").slice(0, 7); (byM[k] = byM[k] || []).push(x); });
   $("carOps").innerHTML = es.length ? Object.keys(byM).sort().reverse().map(k => {
@@ -351,20 +402,23 @@ function renderCar() {
 // ---- تعديل / تنبيهات / تصدير ----
 let lastOps = {list: [], label: ""}, lastCar = {list: [], label: ""};
 function resetEdit() {
-  edit = null; $("add").textContent = "حفظ العملية"; $("addCar").textContent = "حفظ السيارة"; $("addPlan").textContent = "حفظ القسط";
-  ["cancelOp","cancelCar","cancelPlan"].forEach(i => $(i).classList.add("hide"));
-  ["cLic","cIns","cOil"].forEach(i => $(i).value = ""); $("pStart").value = today(); $("date").value = today();
+  edit = null; $("add").textContent = "حفظ العملية"; $("addCar").textContent = "حفظ السيارة"; $("addPlan").textContent = "حفظ القسط"; $("addCust").textContent = "حفظ العميل"; $("addTrip").textContent = "حفظ الرحلة";
+  ["cancelOp","cancelCar","cancelPlan","cancelCust","cancelTrip"].forEach(i => $(i).classList.add("hide"));
+  ["cLic","cIns","cOil"].forEach(i => $(i).value = ""); $("pStart").value = today(); $("date").value = today(); $("tDate").value = today(); $("tIncome").checked = true;
 }
-function cancelEdit() { resetEdit(); ["amount","km","vendor","desc","cName","cPlate","cPrice","cDate","cDriver","cNote","pTitle","pMonthly","pCount"].forEach(i => $(i).value = ""); $("pPaid").value = 0; }
-["cancelOp","cancelCar","cancelPlan"].forEach(i => $(i).onclick = cancelEdit);
+function cancelEdit() { resetEdit(); ["amount","km","vendor","desc","cName","cPlate","cPrice","cDate","cDriver","cNote","pTitle","pMonthly","pCount","cuName","cuPhone","cuPhone2","cuAddress","cuNote","tFrom","tTo","tAmount","tNote"].forEach(i => $(i).value = ""); $("pPaid").value = 0; }
+["cancelOp","cancelCar","cancelPlan","cancelCust","cancelTrip"].forEach(i => $(i).onclick = cancelEdit);
 function startEdit(kind, id) {
-  const x = {entries, cars, plans}[kind].find(v => v.id === id); if (!x) return;
+  const x = {entries, cars, plans, customers, trips}[kind].find(v => v.id === id); if (!x) return;
   curCar = null; edit = {kind, id};
   const set = o => Object.entries(o).forEach(([k, v]) => $(k).value = v ?? "");
   if (kind === "entries") { showTab("ops"); $("type").value = x.type; fillCats(); set({cat: x.cat, car: x.carId, amount: x.amount, date: x.date, km: x.km, vendor: x.vendor, desc: x.desc}); $("add").textContent = "حفظ التعديل"; $("cancelOp").classList.remove("hide"); }
   if (kind === "cars") { showTab("cars"); set({cName: x.name, cPlate: x.plate, cPrice: x.price, cDate: x.boughtAt, cDriver: x.driver, cNote: x.note, cLic: x.lic, cIns: x.ins, cOil: x.oil || ""}); $("addCar").textContent = "حفظ التعديل"; $("cancelCar").classList.remove("hide"); }
   if (kind === "plans") { showTab("plans"); set({pTitle: x.title, pCar: x.carId, pMonthly: x.monthly, pCount: x.count, pStart: x.start, pPaid: x.paid}); $("addPlan").textContent = "حفظ التعديل"; $("cancelPlan").classList.remove("hide"); }
+  if (kind === "customers") { curCust = null; showTab("cust"); set({cuName: x.name, cuPhone: x.phone, cuPhone2: x.phone2, cuAddress: x.address, cuNote: x.note}); $("addCust").textContent = "حفظ التعديل"; $("cancelCust").classList.remove("hide"); }
+  if (kind === "trips") { showTab("client", "cust"); set({tFrom: x.from, tTo: x.to, tDate: x.date, tCar: x.carId, tAmount: x.amount || "", tNote: x.note}); $("tIncome").checked = !!x.entryId; $("addTrip").textContent = "حفظ التعديل"; $("cancelTrip").classList.remove("hide"); }
   window.scrollTo(0, 0);
+  if (kind === "trips") $("tripForm").scrollIntoView();
 }
 const dleft = d => Math.round((new Date(d) - new Date(today())) / 864e5);
 function alertsFor(c) {
@@ -400,6 +454,87 @@ function doExport(kind, src) {
   }
 }
 
+// ---- العملاء والرحلات ----
+const waNum = p => { let d = String(p || "").replace(/\D/g, ""); if (d.startsWith("00")) d = d.slice(2); else if (d.startsWith("0")) d = "20" + d.slice(1); return d; };
+const phoneLinks = c => [c.phone, c.phone2].filter(Boolean).map(p => `<span dir="ltr">${esc(p)}</span> <a href="tel:${esc(String(p).replace(/[^\d+]/g, ""))}">📞 اتصال</a> <a href="https://wa.me/${waNum(p)}" target="_blank" rel="noopener">واتساب</a>`).join("<br>");
+const tripsOf = id => trips.filter(x => x.custId === id);
+const sumAmt = a => a.reduce((s, x) => s + (x.amount || 0), 0);
+$("addCust").onclick = async () => {
+  const name = $("cuName").value.trim(), phone = $("cuPhone").value.trim(), phone2 = $("cuPhone2").value.trim();
+  if (!name) { $("custMsg").textContent = "اكتب اسم العميل"; return; }
+  $("custMsg").textContent = "";
+  const selfId = edit && edit.kind === "customers" ? edit.id : null;
+  const dup = [phone, phone2].filter(Boolean).map(p => customers.find(c => c.id !== selfId && [c.phone, c.phone2].includes(p))).find(Boolean);
+  if (dup && !confirm("الرقم ده مسجل للعميل " + dup.name + "، تكمّل برضه؟")) return;
+  try {
+    await addDoc(collection(db, "users", uid, "customers"), { name, phone, phone2, address: $("cuAddress").value.trim(), note: $("cuNote").value.trim(), createdAt: serverTimestamp() });
+    ["cuName","cuPhone","cuPhone2","cuAddress","cuNote"].forEach(i => $(i).value = "");
+  } catch (e) { $("custMsg").textContent = em(e); }
+};
+function renderCusts() {
+  const q = $("qcu").value.trim().toLowerCase();
+  const list = customers.filter(c => hit(q, [c.name, c.phone, c.phone2, c.address, c.note]));
+  $("custList").innerHTML = !customers.length ? '<div class="card empty">ضيف أول عميل من فوق.</div>' : !list.length ? '<div class="card empty">مفيش نتائج للبحث.</div>' : list.map(c => {
+    const ts = tripsOf(c.id), last = ts.map(x => x.date || "").sort().pop();
+    return `<div class="card click" data-opencust="${c.id}"><div class="top"><h2>${esc(c.name)}</h2><button class="x" data-edit="customers/${c.id}" aria-label="تعديل">✎</button><button class="x" data-del="customers/${c.id}" aria-label="حذف">✕</button></div>
+      ${c.phone || c.phone2 ? `<div class="mute">${phoneLinks(c)}</div>` : ""}
+      ${c.address ? `<div class="mute">📍 ${esc(c.address)}</div>` : ""}
+      ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
+      <div class="sum" style="margin-top:10px"><div><small>الرحلات</small><b>${fmt(ts.length)}</b></div><div><small>إجمالي المبالغ</small><b class="in">${fmt(sumAmt(ts))}</b></div><div><small>آخر رحلة</small><b style="font-size:.85rem">${last ? esc(last) : "—"}</b></div></div>
+      <div class="mute" style="margin-top:8px">اضغط على الكارت لفتح الرحلات</div></div>`;
+  }).join("");
+}
+function renderClient() {
+  if (!curCust) return;
+  const c = customers.find(x => x.id === curCust);
+  if (!c) { curCust = null; showTab("cust"); return; }
+  const q = $("tq").value.trim().toLowerCase();
+  const mine = tripsOf(c.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const list = mine.filter(x => hit(q, [x.from, x.to, x.note, x.date, x.amount, carName(x.carId)]));
+  const dest = {}; mine.forEach(x => { if (x.to) dest[x.to] = (dest[x.to] || 0) + 1; });
+  const top = Object.entries(dest).sort((a, b) => b[1] - a[1])[0];
+  $("custHead").innerHTML = `<h2 class="s">${esc(c.name)}</h2>
+    ${c.phone || c.phone2 ? `<div class="mute">${phoneLinks(c)}</div>` : ""}
+    ${c.address ? `<div class="mute">📍 ${esc(c.address)}</div>` : ""}
+    ${c.note ? `<div class="mute">${esc(c.note)}</div>` : ""}
+    <div class="sum" style="margin-top:10px"><div><small>الرحلات</small><b>${fmt(mine.length)}</b></div><div><small>إجمالي المبالغ</small><b class="in">${fmt(sumAmt(mine))}</b></div><div><small>آخر رحلة</small><b style="font-size:.85rem">${mine.length && mine[0].date ? esc(mine[0].date) : "—"}</b></div></div>
+    ${top && mine.length > 1 ? `<div class="mute" style="margin-top:8px">أكتر وجهة: ${esc(top[0])} (${fmt(top[1])} مرة)</div>` : ""}
+    <button class="full g" data-edit="customers/${c.id}">✎ تعديل بيانات العميل</button>`;
+  const byM = {};
+  list.forEach(x => { const k = (x.date || "").slice(0, 7); (byM[k] = byM[k] || []).push(x); });
+  $("tripList").innerHTML = list.length ? Object.keys(byM).sort().reverse().map(k => `<div class="mh"><span>${monName(k)}</span><span class="mute">${fmt(byM[k].length)} رحلة${sumAmt(byM[k]) ? " · " + fmt(sumAmt(byM[k])) : ""}</span></div>` +
+    byM[k].map(x => `<div class="it"><div><b>${esc(x.from)} ← ${esc(x.to)}</b><small>${[x.date, carName(x.carId), x.note].filter(Boolean).map(esc).join(" · ")}</small></div>
+      <div style="display:flex;align-items:center">${x.amount ? `<span class="amt in">${fmt(x.amount)}</span>` : ""}<button class="x" data-edit="trips/${x.id}" aria-label="تعديل">✎</button><button class="x" data-del="trips/${x.id}" aria-label="حذف">✕</button></div></div>`).join("")).join("")
+    : `<div class="empty">${mine.length ? "مفيش رحلات بالبحث ده." : "مفيش رحلات لهذا العميل لسه."}</div>`;
+}
+async function delTrip(tr) {
+  if (tr.entryId) await deleteDoc(doc(db, "users", uid, "entries", tr.entryId));
+  await deleteDoc(doc(db, "users", uid, "trips", tr.id));
+}
+$("addTrip").onclick = async () => {
+  const c = customers.find(x => x.id === curCust); if (!c) return;
+  const from = $("tFrom").value.trim(), to = $("tTo").value.trim(), amount = parseFloat($("tAmount").value) || 0;
+  if (!from || !to) { $("tripMsg").textContent = "اكتب مكان الانطلاق والوجهة"; return; }
+  $("tripMsg").textContent = "";
+  const date = $("tDate").value || today(), carId = $("tCar").value, note = $("tNote").value.trim();
+  try {
+    const old = edit && edit.kind === "trips" ? trips.find(x => x.id === edit.id) : null;
+    let entryId = old ? old.entryId || null : null;
+    const ent = { type: "in", cat: "توصيل", carId, amount, date, km: null, vendor: c.name, desc: "رحلة " + from + " ← " + to };
+    if ($("tIncome").checked && amount > 0) {
+      let done = false;
+      if (entryId) { try { await updateDoc(doc(db, "users", uid, "entries", entryId), ent); done = true; } catch (e) { entryId = null; } }
+      if (!done) entryId = (await addDoc0(collection(db, "users", uid, "entries"), { ...ent, createdAt: serverTimestamp() })).id;
+    } else if (entryId) { await deleteDoc(doc(db, "users", uid, "entries", entryId)); entryId = null; }
+    await addDoc(collection(db, "users", uid, "trips"), { custId: c.id, from, to, date, carId, amount, note, entryId, createdAt: serverTimestamp() });
+    ["tFrom","tTo","tAmount","tNote"].forEach(i => $(i).value = "");
+  } catch (e) { $("tripMsg").textContent = em(e); }
+};
+function fillPlaces() {
+  const s = new Set(); trips.forEach(x => { if (x.from) s.add(x.from); if (x.to) s.add(x.to); });
+  $("places").innerHTML = [...s].sort((a, b) => a.localeCompare(b, "ar")).map(p => `<option value="${esc(p)}">`).join("");
+}
+
 // ---- الأقساط ----
 $("addPlan").onclick = async () => {
   const monthly = parseFloat($("pMonthly").value), count = parseInt($("pCount").value);
@@ -413,28 +548,35 @@ $("addPlan").onclick = async () => {
     ["pTitle","pMonthly","pCount"].forEach(i => $(i).value = ""); $("pPaid").value = 0;
   } catch (e) { $("planMsg").textContent = em(e); }
 };
-function nextDue(p) { const d = new Date(p.start); d.setMonth(d.getMonth() + p.paid); return d.toISOString().slice(0, 10); }
+function nextDue(p) {
+  const [y, m, d] = (p.start || today()).split("-").map(Number), t = m - 1 + (p.paid || 0);
+  const ny = y + Math.floor(t / 12), nm = t % 12, day = Math.min(d, new Date(ny, nm + 1, 0).getDate());
+  return `${ny}-${String(nm + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 function renderPlans() {
   const qp = $("qp").value.trim().toLowerCase();
-  $("planList").innerHTML = plans.length ? plans.filter(p => hit(qp, [p.title, carName(p.carId), p.monthly])).map(p => {
-    const done = p.paid >= p.count, due = nextDue(p), late = !done && due < today();
-    return `<div class="card"><div class="top"><h2>${esc(p.title)}</h2><button class="x" data-edit="plans/${p.id}" aria-label="تعديل">✎</button><button class="x" data-del="plans/${p.id}" aria-label="حذف">✕</button></div>
-      <div class="mute">${esc(carName(p.carId))} · القسط ${fmt(p.monthly)}</div>
-      <div class="bar"><i style="width:${Math.round(p.paid / p.count * 100)}%"></i></div>
-      <div class="mute">اتدفع ${p.paid} من ${p.count} · المتبقي ${fmt((p.count - p.paid) * p.monthly)}</div>
-      <div class="${late ? "out" : "mute"}" style="margin-top:4px">${done ? "القسط خلص ✓" : (late ? "متأخر! " : "القسط الجاي: ") + due}</div>
-      <button class="full" data-pay="${p.id}" ${done ? "disabled" : ""}>سدّدت قسط (يتسجل كمصروف)</button></div>`;
-  }).join("") : '<div class="card empty">مفيش أقساط مسجلة.</div>';
+  $("planList").innerHTML = plans.length ? plans.filter(p => hit(qp, [p.title, carName(p.carId), p.monthly])).map(p => planCard(p, true)).join("") : '<div class="card empty">مفيش أقساط مسجلة.</div>';
 }
 document.addEventListener("click", async e => {
   const t = e.target;
+  if (t.closest("a")) return;
   const o = t.closest("[data-open]");
   if (t.dataset.edit) { const [k, i] = t.dataset.edit.split("/"); startEdit(k, i); return; }
   if (t.dataset.export) { doExport(t.dataset.export, t.dataset.src); return; }
+  const oc = t.closest("[data-opencust]");
+  if (oc && !t.dataset.del) { if (edit) cancelEdit(); curCust = oc.dataset.opencust; $("tq").value = ""; showTab("client", "cust"); renderClient(); window.scrollTo(0, 0); return; }
   if (o && !t.dataset.del) { curCar = o.dataset.open; $("cMon").value = ""; $("cq").value = ""; showTab("car", "cars"); renderCar(); window.scrollTo(0, 0); return; }
   if (t.dataset.addop) { curCar = null; showTab("ops"); $("car").value = t.dataset.addop; window.scrollTo(0, 0); return; }
   try {
-    if (t.dataset.del && confirm("متأكد من الحذف؟")) { const [c, id] = t.dataset.del.split("/"); await deleteDoc(doc(db, "users", uid, c, id)); }
+    if (t.dataset.del) {
+      const [c, id] = t.dataset.del.split("/");
+      if (c === "trips") { const tr = trips.find(x => x.id === id); if (confirm(tr && tr.entryId ? "متأكد من الحذف؟ هيتمسح كمان الدخل المسجل للرحلة دي من العمليات." : "متأكد من الحذف؟")) await delTrip(tr || {id}); }
+      else if (c === "customers") {
+        const ts = tripsOf(id);
+        if (confirm(ts.length ? "العميل ليه " + ts.length + " رحلة، هتتمسح معاه (مع الدخل المسجل ليها في العمليات). متأكد؟" : "متأكد من الحذف؟")) { for (const tr of ts) await delTrip(tr); await deleteDoc(doc(db, "users", uid, "customers", id)); if (curCust === id) curCust = null; }
+      }
+      else if (confirm("متأكد من الحذف؟")) await deleteDoc(doc(db, "users", uid, c, id));
+    }
     if (t.dataset.pay) {
       const p = plans.find(x => x.id === t.dataset.pay); if (!p || p.paid >= p.count) return;
       await addDoc(collection(db, "users", uid, "entries"), { type: "out", cat: "أقساط", carId: p.carId, amount: p.monthly, date: today(), km: null, vendor: "", desc: p.title + " - قسط " + (p.paid + 1) + " من " + p.count, createdAt: serverTimestamp() });
@@ -444,7 +586,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---- تحميل البيانات ----
-const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); renderCar(); renderAlerts(); };
+const all = () => { fillCarSelects(); renderOps(); renderCars(); renderPlans(); renderCar(); renderAlerts(); renderCusts(); renderClient(); fillPlaces(); };
 onAuthStateChanged(auth, user => {
   unsubs.forEach(u => u()); unsubs = [];
   if (!user) { uid = null; $("app").classList.add("hide"); $("authBox").classList.remove("hide"); return; }
@@ -453,7 +595,7 @@ onAuthStateChanged(auth, user => {
   fillCats(); $("date").value = today(); $("pStart").value = today();
   const watch = (name, order, set) => onSnapshot(order ? query(collection(db, "users", uid, name), orderBy(order, "desc")) : collection(db, "users", uid, name),
     s => { set(s.docs.map(d => ({ id: d.id, ...d.data() }))); all(); }, err => { $("addMsg").textContent = em(err); });
-  unsubs = [watch("cars", null, v => cars = v.sort((a, b) => a.name.localeCompare(b.name, "ar"))), watch("entries", "date", v => entries = v), watch("plans", null, v => plans = v)];
+  unsubs = [watch("cars", null, v => cars = v.sort((a, b) => a.name.localeCompare(b.name, "ar"))), watch("entries", "date", v => entries = v), watch("plans", null, v => plans = v), watch("customers", null, v => customers = v.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"))), watch("trips", null, v => trips = v)];
 });
 </script>
 </body>
